@@ -1,0 +1,6 @@
+node_modules/
+uploads/
+tasks.json
+tasks-archive.json
+tasks.log
+.DS_Store

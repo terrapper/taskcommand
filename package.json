@@ -1,0 +1,15 @@
+{
+  "name": "task-dashboard",
+  "version": "1.0.0",
+  "description": "Agency Task Dashboard — local web UI with autonomous task worker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^10.0.0"
+  }
+}
