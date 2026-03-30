@@ -22,7 +22,7 @@ TaskCommand is a local Express server with a browser-based dashboard for managin
 - **Bulk Actions** -- Multi-select tasks to archive, delete, or reprioritize in batch
 - **Missing Input Detection** -- Warns you if your description mentions attachments but none are uploaded
 - **Activity Log** -- Real-time log of all task operations in the right panel
-- **Task Archive** -- Move completed tasks to an archive to keep the queue clean
+- **Task Archive** -- Archive any task to keep the queue clean, with a dedicated archive view to browse and inspect past tasks
 - **Mobile Responsive** -- Works on phones and tablets with adaptive layout and floating action button
 - **Smart Auto-Refresh** -- Refreshes every 30s but pauses when you're typing or have a modal open
 
@@ -76,7 +76,7 @@ Click the play button on any task or use the "Execute Now" button in the detail 
 | `DELETE` | `/api/tasks/:id` | Delete a task |
 | `POST` | `/api/tasks/:id/execute` | Flag for immediate execution |
 | `DELETE` | `/api/tasks/:id/attachments/:attId` | Remove an attachment |
-| `POST` | `/api/tasks/bulk/archive` | Archive completed tasks |
+| `POST` | `/api/tasks/bulk/archive` | Archive selected tasks (or all completed if no IDs) |
 | `POST` | `/api/tasks/bulk/delete` | Delete multiple tasks |
 | `POST` | `/api/tasks/bulk/priority` | Change priority for multiple tasks |
 | `GET` | `/api/archive` | List archived tasks |

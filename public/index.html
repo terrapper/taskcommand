@@ -874,6 +874,11 @@ body::before {
         <span class="priority-indicator low"></span> Low <span class="badge" id="badge-low">0</span>
       </button>
     </div>
+    <div class="sidebar-section" style="margin-top:auto">
+      <button class="filter-btn" data-filter="archive" onclick="setFilter('archive')">
+        <i class="ph ph-archive"></i> Archive <span class="badge" id="badge-archive">0</span>
+      </button>
+    </div>
     <button class="new-task-btn" onclick="openModal()">
       <i class="ph ph-plus-circle"></i> New Task
     </button>
@@ -1021,6 +1026,7 @@ body::before {
 // ── State ──
 let tasks = [];
 let currentFilter = 'all';
+let archivedTasks = [];
 let selectedTaskId = null;
 let pendingFiles = [];
 let deleteTargetId = null;
@@ -1049,6 +1055,7 @@ async function api(method, url, body, isFormData) {
 // ── Data ──
 async function loadTasks() {
   tasks = await api('GET', '/api/tasks');
+  archivedTasks = await api('GET', '/api/archive');
   updateBadges();
   renderTasks();
 }
@@ -1071,6 +1078,8 @@ function updateBadges() {
   document.getElementById('stat-critical').textContent = counts.critical;
   document.getElementById('stat-active').textContent = counts.pending + counts.in_progress;
   document.getElementById('stat-done').textContent = counts.completed;
+  const archBadge = document.getElementById('badge-archive');
+  if (archBadge) archBadge.textContent = archivedTasks.length;
 }
 
 // ── Filtering & Sorting ──
@@ -1081,7 +1090,8 @@ function setFilter(filter) {
 
   const titles = {
     all: 'All Tasks', pending: 'Pending', in_progress: 'In Progress', completed: 'Completed',
-    critical: 'Critical Priority', high: 'High Priority', medium: 'Medium Priority', low: 'Low Priority'
+    critical: 'Critical Priority', high: 'High Priority', medium: 'Medium Priority', low: 'Low Priority',
+    archive: 'Archive'
   };
   document.getElementById('main-title').textContent = titles[filter] || 'All Tasks';
   renderTasks();
@@ -1133,6 +1143,42 @@ function extractDeliverablePaths(text) {
 // ── Rendering ──
 function renderTasks() {
   const container = document.getElementById('task-list');
+
+  if (currentFilter === 'archive') {
+    if (archivedTasks.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="ph ph-archive"></i>
+          <h3>Archive is empty</h3>
+          <p>Archived tasks will appear here.</p>
+        </div>`;
+      return;
+    }
+    const sorted = [...archivedTasks].sort((a, b) => new Date(b.archivedAt || b.createdAt) - new Date(a.archivedAt || a.createdAt));
+    container.innerHTML = sorted.map(t => {
+      const summary = getCompletionSummary(t);
+      const hasDelvs = summary && extractDeliverablePaths(summary).length > 0;
+      return `
+      <div class="task-card completed" onclick="showDetail('${t.id}')">
+        <div class="task-checkbox checked" style="pointer-events:none"></div>
+        <div class="task-body">
+          <div class="task-title-row">
+            <span class="task-title">${esc(t.title)}</span>
+            <span class="task-priority-tag ${t.priority}">${PRIORITY_LABELS[t.priority]}</span>
+          </div>
+          ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+          <div class="task-meta">
+            ${t.archivedAt ? `<span class="task-meta-item" style="color:var(--text-dim)"><i class="ph ph-archive"></i> Archived ${timeAgo(t.archivedAt)}</span>` : ''}
+            ${t.assignee ? `<span class="task-meta-item"><i class="ph ph-user"></i> ${esc(t.assignee)}</span>` : ''}
+            ${hasDelvs ? `<span class="task-meta-item" style="color:var(--green)"><i class="ph ph-folder-open"></i> Deliverables</span>` : ''}
+            <span class="task-meta-item"><i class="ph ph-clock"></i> Created ${timeAgo(t.createdAt)}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
+
   const filtered = getFilteredTasks();
 
   if (filtered.length === 0) {
@@ -1211,8 +1257,10 @@ function renderLog(lines) {
 
 function showDetail(id) {
   selectedTaskId = id;
-  const t = tasks.find(t => t.id === id);
+  const t = tasks.find(t => t.id === id) || archivedTasks.find(t => t.id === id);
   if (!t) return;
+
+  const isArchived = !tasks.find(x => x.id === id);
 
   switchPanel('detail');
   const container = document.getElementById('panel-detail');
@@ -1234,23 +1282,37 @@ function showDetail(id) {
   container.innerHTML = `
     <div class="detail-header">
       <button class="detail-back" onclick="switchPanel('log')"><i class="ph ph-arrow-left"></i> Back</button>
+      ${isArchived ? '<span class="task-priority-tag" style="background:var(--text-dim);color:var(--bg-deep);font-size:0.65rem"><i class="ph ph-archive"></i> Archived</span>' : ''}
       <span class="task-priority-tag ${t.priority}">${PRIORITY_LABELS[t.priority]}</span>
     </div>
     <div class="detail-title">${esc(t.title)}</div>
-    <div class="detail-field">
-      <div class="detail-label">Status</div>
-      <div class="detail-value">
-        <select class="form-select" style="max-width:180px" onchange="updateStatus('${t.id}', this.value)">
-          <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
-          <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
-          <option value="completed" ${t.status==='completed'?'selected':''}>Completed</option>
-        </select>
+    ${isArchived ? `
+      <div class="detail-field">
+        <div class="detail-label">Status</div>
+        <div class="detail-value" style="text-transform:capitalize">${t.status.replace('_',' ')}</div>
       </div>
-    </div>
+    ` : `
+      <div class="detail-field">
+        <div class="detail-label">Status</div>
+        <div class="detail-value">
+          <select class="form-select" style="max-width:180px" onchange="updateStatus('${t.id}', this.value)">
+            <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
+            <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
+            <option value="completed" ${t.status==='completed'?'selected':''}>Completed</option>
+          </select>
+        </div>
+      </div>
+    `}
     ${t.description ? `<div class="detail-field"><div class="detail-label">Description</div><div class="detail-value">${esc(t.description).replace(/\n/g,'<br>')}</div></div>` : ''}
     ${t.context ? `<div class="detail-field"><div class="detail-label" style="color:var(--purple)"><i class="ph ph-brain" style="font-size:0.8rem;vertical-align:-1px"></i> Context (for worker)</div><div class="detail-value" style="font-size:0.8rem;color:var(--text-muted);background:var(--purple-dim);padding:10px 12px;border-radius:var(--radius);border:1px solid rgba(167,139,250,0.1)">${esc(t.context).replace(/\n/g,'<br>')}</div></div>` : ''}
     ${t.dueDate ? `<div class="detail-field"><div class="detail-label">Due Date</div><div class="detail-value">${formatDate(t.dueDate)}</div></div>` : ''}
     ${t.assignee ? `<div class="detail-field"><div class="detail-label">Assignee</div><div class="detail-value">${esc(t.assignee)}</div></div>` : ''}
+    ${isArchived && t.archivedAt ? `
+      <div class="detail-field">
+        <div class="detail-label">Archived</div>
+        <div class="detail-value" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">${formatTimestamp(t.archivedAt)}</div>
+      </div>
+    ` : ''}
     <div class="detail-field">
       <div class="detail-label">Created</div>
       <div class="detail-value" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">${formatTimestamp(t.createdAt)}</div>
@@ -1264,17 +1326,19 @@ function showDetail(id) {
               <i class="ph ph-file"></i>
               <a href="${a.url}" target="_blank">${esc(a.originalName)}</a>
               <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-dim)">${formatSize(a.size)}</span>
-              <button class="attachment-remove" onclick="removeAttachment('${t.id}','${a.id}')" title="Remove"><i class="ph ph-x"></i></button>
+              ${!isArchived ? `<button class="attachment-remove" onclick="removeAttachment('${t.id}','${a.id}')" title="Remove"><i class="ph ph-x"></i></button>` : ''}
             </div>
           `).join('')}
         </div>
       </div>` : ''}
     ${deliverablesHtml}
-    <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap">
-      ${t.status !== 'completed' ? `<button class="btn btn-execute" onclick="executeNow('${t.id}')" ${t.executeNow && t.status === 'in_progress' ? 'disabled' : ''}><i class="ph ph-play"></i> ${t.executeNow && t.status === 'in_progress' ? 'Executing...' : 'Execute Now'}</button>` : ''}
-      <button class="btn btn-ghost" onclick="openModal('${t.id}')"><i class="ph ph-pencil-simple"></i> Edit</button>
-      <button class="btn btn-danger" onclick="openConfirm('${t.id}')"><i class="ph ph-trash"></i> Delete</button>
-    </div>
+    ${!isArchived ? `
+      <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap">
+        ${t.status !== 'completed' ? `<button class="btn btn-execute" onclick="executeNow('${t.id}')" ${t.executeNow && t.status === 'in_progress' ? 'disabled' : ''}><i class="ph ph-play"></i> ${t.executeNow && t.status === 'in_progress' ? 'Executing...' : 'Execute Now'}</button>` : ''}
+        <button class="btn btn-ghost" onclick="openModal('${t.id}')"><i class="ph ph-pencil-simple"></i> Edit</button>
+        <button class="btn btn-danger" onclick="openConfirm('${t.id}')"><i class="ph ph-trash"></i> Delete</button>
+      </div>
+    ` : ''}
   `;
 }
 
@@ -1529,10 +1593,9 @@ document.addEventListener('click', function(e) {
 async function bulkArchive() {
   const ids = Array.from(selectedIds);
   if (!ids.length) return;
-  // Archive = mark completed
-  const promises = ids.map(id => api('PUT', `/api/tasks/${id}`, { status: 'completed' }));
-  await Promise.all(promises);
-  toast(`${ids.length} task(s) archived`, 'success');
+  const res = await api('POST', '/api/tasks/bulk/archive', { ids });
+  const count = res.archived || 0;
+  toast(count ? `${count} task(s) archived` : 'No tasks were archived', count ? 'success' : 'warning');
   selectedIds.clear();
   updateBulkBar();
   await refresh();

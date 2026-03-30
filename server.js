@@ -119,8 +119,8 @@ app.post('/api/tasks/bulk/archive', (req, res) => {
 
   let toArchive;
   if (ids && Array.isArray(ids) && ids.length > 0) {
-    // Archive only specified tasks (must be completed)
-    toArchive = tasks.filter(t => ids.includes(t.id) && t.status === 'completed');
+    // Archive specified tasks (any status)
+    toArchive = tasks.filter(t => ids.includes(t.id));
   } else {
     // Archive ALL completed tasks
     toArchive = tasks.filter(t => t.status === 'completed');
